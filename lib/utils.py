@@ -66,8 +66,8 @@ def make_eval_env(env_id, seed=None, render=False, fps=30):
 
 
 def save_normalize_params(envs, path):
-    obs_rms = envs.get_wrapper_attr("obs_rms")[0]
-    ret_rms = envs.get_wrapper_attr("return_rms")[0]
+    obs_rms = envs.get_attr("obs_rms")[0]
+    ret_rms = envs.get_attr("return_rms")[0]
     params = {
         "obs_rms": {"mean": obs_rms.mean.copy(), "var": obs_rms.var.copy(), "count": obs_rms.count},
         "ret_rms": {"mean": ret_rms.mean, "var": ret_rms.var, "count": ret_rms.count},
