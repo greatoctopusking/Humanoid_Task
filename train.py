@@ -233,11 +233,11 @@ if __name__ == "__main__":
                 if raw_mean > best_mean_reward:
                     best_mean_reward = raw_mean
                     torch.save(agent.state_dict(), os.path.join(checkpoint_dir, "best.pt"))
-                    save_normalize_params(envs.envs[0], os.path.join(checkpoint_dir, "normalize.pkl"))
+                    save_normalize_params(envs, os.path.join(checkpoint_dir, "normalize.pkl"))
                     print(f"  New best model saved with raw reward: {raw_mean:.2f}")
 
             torch.save(agent.state_dict(), os.path.join(checkpoint_dir, "last.pt"))
-            save_normalize_params(envs.envs[0], os.path.join(checkpoint_dir, "normalize_last.pkl"))
+            save_normalize_params(envs, os.path.join(checkpoint_dir, "normalize_last.pkl"))
 
             if epoch % args.render_epoch == 0:
                 log_video(test_video_env, agent, device, os.path.join(videos_dir, f"epoch_{epoch}.mp4"))

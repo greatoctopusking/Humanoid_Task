@@ -65,21 +65,13 @@ def make_eval_env(env_id, seed=None, render=False, fps=30):
     return env
 
 
-def save_normalize_params(norm_env, path):
-    wrappers = []
-    e = norm_env
-    while hasattr(e, "env"):
-        wrappers.append(e)
-        e = e.env
-    obs_rms = None
-    ret_rms = None
-    for w in wrappers:
-        if hasattr(w, "obs_rms"):
-            obs_rms = {"mean": w.obs_rms.mean.copy(), "var": w.obs_rms.var.copy(), "count": w.obs_rms.count}
-    for w in wrappers:
-        if hasattr(w, "return_rms"):
-            ret_rms = {"mean": w.return_rms.mean, "var": w.return_rms.var, "count": w.return_rms.count}
-    params = {"obs_rms": obs_rms, "ret_rms": ret_rms}
+def save_normalize_params(envs, path):
+    obs_rms = envs.get_wrapper_attr("obs_rms")[0]
+    ret_rms = envs.get_wrapper_attr("return_rms")[0]
+    params = {
+        "obs_rms": {"mean": obs_rms.mean.copy(), "var": obs_rms.var.copy(), "count": obs_rms.count},
+        "ret_rms": {"mean": ret_rms.mean, "var": ret_rms.var, "count": ret_rms.count},
+    }
     with open(path, "wb") as f:
         pickle.dump(params, f)
 
