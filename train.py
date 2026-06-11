@@ -84,7 +84,9 @@ if __name__ == "__main__":
         [lambda i=i: make_env(args.env, normalize=True) for i in range(args.n_envs)]
     )
     raw_eval_env = make_eval_env(args.env, seed=args.seed)
-    test_video_env = make_eval_env(args.env, seed=args.seed, render=True)
+    test_video_env = gym.make(args.env, render_mode="rgb_array")
+    test_video_env.metadata["render_fps"] = 30
+    test_video_env.reset(seed=args.seed)
 
     obs_dim = envs.single_observation_space.shape
     act_dim = envs.single_action_space.shape

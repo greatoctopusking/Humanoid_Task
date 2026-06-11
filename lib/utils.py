@@ -57,8 +57,7 @@ def make_env(env_id, normalize=True, render=False, fps=30):
 
 def make_eval_env(env_id, seed=None, render=False, fps=30):
     if render:
-        env = gym.make(env_id, render_mode="rgb_array")
-        env.metadata["render_fps"] = fps
+        env = gym.make(env_id, render_mode="human")
     else:
         env = gym.make(env_id)
     env.reset(seed=seed)
