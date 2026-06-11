@@ -1,5 +1,6 @@
 import datetime
 import os
+import sys
 import time
 
 import gymnasium as gym
@@ -13,6 +14,24 @@ from tqdm import tqdm
 from lib.agent import PPOAgent
 from lib.buffer import PPOBuffer
 from lib.utils import parse_args, set_seed, make_env, make_eval_env, save_normalize_params, log_video
+
+
+class Tee:
+    def __init__(self, file_path):
+        self.file = open(file_path, "w", encoding="utf-8")
+        self.stdout = sys.stdout
+
+    def write(self, data):
+        self.stdout.write(data)
+        self.file.write(data)
+        self.file.flush()
+
+    def flush(self):
+        self.stdout.flush()
+        self.file.flush()
+
+    def close(self):
+        self.file.close()
 
 
 def ppo_update(agent, optimizer, scaler, batch_obs, batch_actions, batch_returns,
@@ -74,6 +93,9 @@ if __name__ == "__main__":
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     log_dir = os.path.join(current_dir, "logs", folder_name)
+    log_file = os.path.join(log_dir, "train.log")
+    tee = Tee(log_file)
+    sys.stdout = tee
     writer = SummaryWriter(log_dir)
     writer.add_text(
         "hyperparameters",
@@ -251,3 +273,5 @@ if __name__ == "__main__":
         raw_eval_env.close()
         test_video_env.close()
         writer.close()
+        tee.close()
+        sys.stdout = tee.stdout
