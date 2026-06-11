@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.distributions import Normal
 
-LOG_STD_MIN = -20.0
+LOG_STD_MIN = -5.0
 LOG_STD_MAX = 2.0
 
 
@@ -88,7 +88,7 @@ class SACAgent(nn.Module):
         action = y * self.action_scale + self.action_bias
 
         log_prob = dist.log_prob(raw)
-        log_prob -= torch.log(1 - y.pow(2) + 1e-6)
+        log_prob -= torch.log(1 - y.pow(2) + 1e-7)
         log_prob = log_prob.sum(-1)
 
         return action, log_prob

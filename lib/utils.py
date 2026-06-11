@@ -20,7 +20,7 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--tau", type=float, default=0.005)
-    parser.add_argument("--learning-rate", type=float, default=3e-4)
+    parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--alpha-lr", type=float, default=3e-4)
     parser.add_argument("--start-steps", type=int, default=10000)
     parser.add_argument("--updates-per-step", type=int, default=1)
@@ -48,7 +48,6 @@ def make_env(env_id, normalize=True, render=False, fps=30):
         env = gym.make(env_id)
     if normalize:
         env = gym.wrappers.NormalizeObservation(env)
-        env = gym.wrappers.NormalizeReward(env)
     return env
 
 

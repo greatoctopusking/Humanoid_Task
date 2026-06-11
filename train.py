@@ -67,6 +67,7 @@ def sac_update(agent, critic_optim, actor_optim, alpha_optim,
         q1_next, q2_next = agent.get_q_values_target(batch_next_obs, next_actions)
         q_next = torch.min(q1_next, q2_next) - alpha * next_log_probs
         q_target = batch_rewards + gamma * (1.0 - batch_dones) * q_next
+        q_target = torch.clamp(q_target, -100.0, 100.0)
 
     with torch.amp.autocast(str(device)):
         q1, q2 = agent.get_q_values(batch_obs, batch_actions)
