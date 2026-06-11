@@ -93,6 +93,7 @@ if __name__ == "__main__":
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     log_dir = os.path.join(current_dir, "logs", folder_name)
+    os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, "train.log")
     tee = Tee(log_file)
     sys.stdout = tee
