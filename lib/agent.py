@@ -13,13 +13,13 @@ class SACAgent(nn.Module):
         self.action_scale = (action_high - action_low) / 2.0
         self.action_bias = (action_high + action_low) / 2.0
 
-        hidden = [256, 256, 256]
+        hidden = [256, 128]
 
         actor_layers = []
         prev = num_inputs
         for h in hidden:
             actor_layers.append(nn.Linear(prev, h))
-            actor_layers.append(nn.ReLU())
+            actor_layers.append(nn.LeakyReLU(0.01))
             prev = h
         self.actor_fc = nn.Sequential(*actor_layers)
         self.actor_mu = nn.Linear(prev, num_actions)
@@ -30,7 +30,7 @@ class SACAgent(nn.Module):
             prev = num_inputs + num_actions
             for h in hidden:
                 layers.append(nn.Linear(prev, h))
-                layers.append(nn.ReLU())
+                layers.append(nn.LeakyReLU(0.01))
                 prev = h
             layers.append(nn.Linear(prev, 1))
             return nn.Sequential(*layers)

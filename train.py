@@ -1,7 +1,6 @@
 import datetime
 import os
 import sys
-import time
 
 import gymnasium as gym
 import numpy as np
@@ -82,7 +81,6 @@ def sac_update(agent, critic_optim, actor_optim, alpha_optim,
     scaler_critic.update()
 
     actor_loss_val = 0.0
-    actor_loss = torch.tensor(0.0, device=device)
     alpha_loss_val = 0.0
 
     if update_actor:
@@ -142,16 +140,19 @@ if __name__ == "__main__":
         "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
     )
 
-    train_env = make_env(args.env, normalize=True)
+    def _make_env():
+        return make_env(args.env, normalize=True)
+
+    envs = gym.vector.AsyncVectorEnv([_make_env for _ in range(args.n_envs)])
     raw_eval_env = make_eval_env(args.env, seed=args.seed)
     test_video_env = gym.make(args.env, render_mode="rgb_array")
     test_video_env.metadata["render_fps"] = 30
     test_video_env.reset(seed=args.seed)
 
-    obs_dim = train_env.observation_space.shape
-    act_dim = train_env.action_space.shape
-    action_low = float(train_env.action_space.low[0])
-    action_high = float(train_env.action_space.high[0])
+    obs_dim = envs.single_observation_space.shape
+    act_dim = envs.single_action_space.shape
+    action_low = float(envs.single_action_space.low[0])
+    action_high = float(envs.single_action_space.high[0])
 
     agent = SACAgent(obs_dim[0], act_dim[0], action_low, action_high).to(device)
 
@@ -174,43 +175,38 @@ if __name__ == "__main__":
 
     global_step = 0
     best_mean_reward = -np.inf
-    episode_reward = 0.0
-    episode_steps = 0
+    episode_rewards = np.zeros(args.n_envs)
     critic_update_count = 0
     actor_update_freq = 2
 
-    obs, _ = train_env.reset()
+    obs, _ = envs.reset(seed=args.seed)
 
     try:
         pbar = tqdm(total=args.total_steps, desc="Training")
         while global_step < args.total_steps:
             if global_step < args.start_steps:
-                action = train_env.action_space.sample()
+                actions = envs.action_space.sample()
             else:
                 with torch.no_grad():
-                    action, _ = agent.get_action(
-                        torch.tensor(np.array([obs], dtype=np.float32), device=device)
+                    actions, _ = agent.get_action(
+                        torch.tensor(np.array(obs, dtype=np.float32), device=device)
                     )
-                    action = action.squeeze(0).cpu().numpy()
+                    actions = actions.cpu().numpy()
 
-            next_obs, reward, terminated, truncated, _ = train_env.step(action)
-            real_done = float(terminated)
-            done = terminated or truncated
+            next_obs, rewards, terminations, truncations, _ = envs.step(actions)
 
-            buffer.store(obs, action, reward, next_obs, real_done)
+            for i in range(args.n_envs):
+                real_done = float(terminations[i])
+                buffer.store(obs[i], actions[i], rewards[i], next_obs[i], real_done)
+                episode_rewards[i] += rewards[i]
+
+                if terminations[i] or truncations[i]:
+                    writer.add_scalar("train/episode_reward", episode_rewards[i], global_step)
+                    episode_rewards[i] = 0.0
 
             obs = next_obs
-            episode_reward += reward
-            episode_steps += 1
-            global_step += 1
-            pbar.update(1)
-
-            if done:
-                writer.add_scalar("train/episode_reward", episode_reward, global_step)
-                writer.add_scalar("train/episode_steps", episode_steps, global_step)
-                episode_reward = 0.0
-                episode_steps = 0
-                obs, _ = train_env.reset()
+            global_step += args.n_envs
+            pbar.update(args.n_envs)
 
             if global_step >= args.start_steps:
                 for _ in range(args.updates_per_step):
@@ -232,7 +228,7 @@ if __name__ == "__main__":
                             writer.add_scalar("loss/alpha", alpha_loss, critic_update_count)
                             writer.add_scalar("metrics/alpha", alpha, critic_update_count)
 
-            if global_step % args.eval_freq == 0:
+            if global_step % args.eval_freq < args.n_envs or global_step >= args.total_steps:
                 raw_mean, raw_std = evaluate(agent, raw_eval_env, device, args.eval_episodes)
                 writer.add_scalar("reward/raw_mean", raw_mean, global_step)
                 writer.add_scalar("reward/raw_std", raw_std, global_step)
@@ -241,17 +237,17 @@ if __name__ == "__main__":
                 if raw_mean > best_mean_reward:
                     best_mean_reward = raw_mean
                     torch.save(agent.state_dict(), os.path.join(checkpoint_dir, "best.pt"))
-                    save_normalize_params(train_env, os.path.join(checkpoint_dir, "normalize.pkl"))
+                    save_normalize_params(envs, os.path.join(checkpoint_dir, "normalize.pkl"))
                     print(f"  New best model saved with raw reward: {raw_mean:.2f}")
 
                 torch.save(agent.state_dict(), os.path.join(checkpoint_dir, "last.pt"))
-                save_normalize_params(train_env, os.path.join(checkpoint_dir, "normalize_last.pkl"))
+                save_normalize_params(envs, os.path.join(checkpoint_dir, "normalize_last.pkl"))
 
-            if global_step % 250000 == 0:
+            if global_step % 250000 < args.n_envs and global_step >= 250000:
                 log_video(test_video_env, agent, device, os.path.join(videos_dir, f"step_{global_step}.mp4"))
 
     finally:
-        train_env.close()
+        envs.close()
         raw_eval_env.close()
         test_video_env.close()
         writer.close()

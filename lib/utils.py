@@ -14,16 +14,16 @@ def parse_args():
     parser.add_argument("--cuda", default=True if torch.cuda.is_available() else False, action="store_true")
     parser.add_argument("--env", default="Humanoid-v5")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--n-envs", type=int, default=1)
+    parser.add_argument("--n-envs", type=int, default=8)
     parser.add_argument("--total-steps", type=int, default=5_000_000)
-    parser.add_argument("--buffer-size", type=int, default=1_000_000)
-    parser.add_argument("--batch-size", type=int, default=256)
+    parser.add_argument("--buffer-size", type=int, default=500_000)
+    parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--tau", type=float, default=0.005)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--alpha-lr", type=float, default=3e-4)
-    parser.add_argument("--start-steps", type=int, default=10000)
-    parser.add_argument("--updates-per-step", type=int, default=1)
+    parser.add_argument("--start-steps", type=int, default=2000)
+    parser.add_argument("--updates-per-step", type=int, default=4)
     parser.add_argument("--render-epoch", type=int, default=10)
     parser.add_argument("--eval-freq", type=int, default=50000)
     parser.add_argument("--eval-episodes", type=int, default=10)
@@ -60,23 +60,34 @@ def make_eval_env(env_id, seed=None, render=False, fps=30):
     return env
 
 
-def save_normalize_params(env, path):
-    obs_rms = None
-    ret_rms = None
+def _extract_obs_rms(env):
     w = env
     while hasattr(w, "env"):
-        if hasattr(w, "obs_rms") and obs_rms is None:
-            obs_rms = w.obs_rms
-        if hasattr(w, "return_rms") and ret_rms is None:
-            ret_rms = w.return_rms
+        if hasattr(w, "obs_rms"):
+            return w.obs_rms
         w = w.env
+    return None
 
-    params = {
-        "obs_rms": {"mean": obs_rms.mean.copy(), "var": obs_rms.var.copy(), "count": obs_rms.count}
-        if obs_rms is not None else None,
-        "ret_rms": {"mean": ret_rms.mean, "var": ret_rms.var, "count": ret_rms.count}
-        if ret_rms is not None else None,
-    }
+
+def save_normalize_params(envs, path):
+    if hasattr(envs, "envs"):
+        rms_list = []
+        for e in envs.envs:
+            r = _extract_obs_rms(e)
+            if r is not None:
+                rms_list.append(r)
+        obs_data = None
+        if rms_list:
+            obs_data = {
+                "mean": np.mean([r.mean for r in rms_list], axis=0),
+                "var": np.mean([r.var for r in rms_list], axis=0),
+                "count": np.sum([r.count for r in rms_list]),
+            }
+    else:
+        r = _extract_obs_rms(envs)
+        obs_data = {"mean": r.mean.copy(), "var": r.var.copy(), "count": r.count} if r is not None else None
+
+    params = {"obs_rms": obs_data, "ret_rms": None}
     with open(path, "wb") as f:
         pickle.dump(params, f)
 
