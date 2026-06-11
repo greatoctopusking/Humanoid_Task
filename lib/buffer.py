@@ -1,54 +1,40 @@
+import numpy as np
 import torch
 
 
-class PPOBuffer:
-    def __init__(self, obs_dim, act_dim, size, num_envs, device, gamma=0.99, gae_lambda=0.95):
-        self.capacity = size
-        self.obs_buf = torch.zeros((size, num_envs, *obs_dim), dtype=torch.float32, device=device)
-        self.act_buf = torch.zeros((size, num_envs, *act_dim), dtype=torch.float32, device=device)
-        self.rew_buf = torch.zeros((size, num_envs), dtype=torch.float32, device=device)
-        self.val_buf = torch.zeros((size, num_envs), dtype=torch.float32, device=device)
-        self.term_buf = torch.zeros((size, num_envs), dtype=torch.float32, device=device)
-        self.trunc_buf = torch.zeros((size, num_envs), dtype=torch.float32, device=device)
-        self.logprob_buf = torch.zeros((size, num_envs), dtype=torch.float32, device=device)
-        self.gamma = gamma
-        self.gae_lambda = gae_lambda
-        self.ptr = 0
+class ReplayBuffer:
+    def __init__(self, obs_dim, act_dim, capacity, device):
+        self.capacity = capacity
+        self.device = device
 
-    def store(self, obs, act, rew, val, term, trunc, logprob):
+        self.obs_buf = np.zeros((capacity, *obs_dim), dtype=np.float32)
+        self.act_buf = np.zeros((capacity, *act_dim), dtype=np.float32)
+        self.rew_buf = np.zeros((capacity, 1), dtype=np.float32)
+        self.next_obs_buf = np.zeros((capacity, *obs_dim), dtype=np.float32)
+        self.done_buf = np.zeros((capacity, 1), dtype=np.float32)
+
+        self.ptr = 0
+        self.size = 0
+
+    def store(self, obs, action, reward, next_obs, done):
         self.obs_buf[self.ptr] = obs
-        self.act_buf[self.ptr] = act
-        self.rew_buf[self.ptr] = rew
-        self.val_buf[self.ptr] = val
-        self.term_buf[self.ptr] = term
-        self.trunc_buf[self.ptr] = trunc
-        self.logprob_buf[self.ptr] = logprob
-        self.ptr += 1
+        self.act_buf[self.ptr] = action
+        self.rew_buf[self.ptr] = reward
+        self.next_obs_buf[self.ptr] = next_obs
+        self.done_buf[self.ptr] = done
 
-    def calculate_advantages(self, last_vals, last_terminateds, last_truncateds):
-        assert self.ptr == self.capacity, "Buffer not full"
+        self.ptr = (self.ptr + 1) % self.capacity
+        self.size = min(self.size + 1, self.capacity)
 
-        with torch.no_grad():
-            adv_buf = torch.zeros_like(self.rew_buf)
-            last_gae = 0.0
-            for t in reversed(range(self.capacity)):
-                if t == self.capacity - 1:
-                    next_vals = last_vals
-                    term_mask = 1.0 - last_terminateds
-                    trunc_mask = 1.0 - last_truncateds
-                else:
-                    next_vals = self.val_buf[t + 1]
-                    term_mask = 1.0 - self.term_buf[t + 1]
-                    trunc_mask = 1.0 - self.trunc_buf[t + 1]
+    def sample(self, batch_size):
+        indices = np.random.choice(self.size, batch_size, replace=False)
+        return (
+            torch.tensor(self.obs_buf[indices], dtype=torch.float32, device=self.device),
+            torch.tensor(self.act_buf[indices], dtype=torch.float32, device=self.device),
+            torch.tensor(self.rew_buf[indices], dtype=torch.float32, device=self.device),
+            torch.tensor(self.next_obs_buf[indices], dtype=torch.float32, device=self.device),
+            torch.tensor(self.done_buf[indices], dtype=torch.float32, device=self.device),
+        )
 
-                delta = self.rew_buf[t] + self.gamma * next_vals * term_mask - self.val_buf[t]
-                last_gae = delta + self.gamma * self.gae_lambda * term_mask * trunc_mask * last_gae
-                adv_buf[t] = last_gae
-
-            ret_buf = adv_buf + self.val_buf
-            return adv_buf, ret_buf
-
-    def get(self):
-        assert self.ptr == self.capacity
-        self.ptr = 0
-        return self.obs_buf, self.act_buf, self.logprob_buf
+    def __len__(self):
+        return self.size

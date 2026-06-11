@@ -4,7 +4,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 
-from lib.agent import PPOAgent
+from lib.agent import SACAgent
 from lib.utils import make_eval_env, load_normalize_params
 
 
@@ -26,8 +26,10 @@ if __name__ == "__main__":
     env = make_eval_env(args.env, seed=args.seed, render=args.render)
     obs_dim = env.observation_space.shape
     action_dim = env.action_space.shape
+    action_low = float(env.action_space.low[0])
+    action_high = float(env.action_space.high[0])
 
-    agent = PPOAgent(obs_dim[0], action_dim[0]).to(device)
+    agent = SACAgent(obs_dim[0], action_dim[0], action_low, action_high).to(device)
 
     try:
         agent.load_state_dict(torch.load(args.model, map_location=device, weights_only=True))
@@ -62,8 +64,9 @@ if __name__ == "__main__":
             if args.render:
                 env.render()
             with torch.no_grad():
-                action, _, _, _ = agent.get_action_and_value(
-                    torch.tensor(np.array([obs], dtype=np.float32), device=device)
+                action, _ = agent.get_action(
+                    torch.tensor(np.array([obs], dtype=np.float32), device=device),
+                    deterministic=True,
                 )
             obs, reward, terminated, truncated, _ = env.step(action.squeeze(0).cpu().numpy())
             total_reward += reward
