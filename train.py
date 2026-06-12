@@ -140,10 +140,9 @@ if __name__ == "__main__":
         "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
     )
 
-    def _make_env():
-        return make_env(args.env, normalize=True)
-
-    envs = gym.vector.AsyncVectorEnv([_make_env for _ in range(args.n_envs)])
+    envs = gym.vector.AsyncVectorEnv(
+        [lambda i=i: make_env(args.env, normalize=True) for i in range(args.n_envs)]
+    )
     raw_eval_env = make_eval_env(args.env, seed=args.seed)
     test_video_env = gym.make(args.env, render_mode="rgb_array")
     test_video_env.metadata["render_fps"] = 30
