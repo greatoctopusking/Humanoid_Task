@@ -14,7 +14,7 @@ def parse_args():
     parser.add_argument("--cuda", default=True if torch.cuda.is_available() else False, action="store_true")
     parser.add_argument("--env", default="Humanoid-v5")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--n-envs", type=int, default=64)
+    parser.add_argument("--n-envs", type=int, default=32)
     parser.add_argument("--total-steps", type=int, default=5_000_000)
     parser.add_argument("--buffer-size", type=int, default=1_000_000)
     parser.add_argument("--batch-size", type=int, default=512)
