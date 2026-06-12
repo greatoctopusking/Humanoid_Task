@@ -13,7 +13,7 @@ class SACAgent(nn.Module):
         self.action_scale = (action_high - action_low) / 2.0
         self.action_bias = (action_high + action_low) / 2.0
 
-        hidden = [256, 128]
+        hidden = [256, 256]
 
         actor_layers = []
         prev = num_inputs
