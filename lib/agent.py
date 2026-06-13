@@ -42,7 +42,7 @@ class SACAgent(nn.Module):
         self.critic_1_target.load_state_dict(self.critic_1.state_dict())
         self.critic_2_target.load_state_dict(self.critic_2.state_dict())
 
-        self.alpha = 0.2
+        self.alpha = 0.5
 
         self._init_weights()
 
