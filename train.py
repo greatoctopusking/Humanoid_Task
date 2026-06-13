@@ -219,8 +219,7 @@ if __name__ == "__main__":
                     critic_update_count += 1
 
                     if critic_update_count % 5000 == 0:
-                        act_str = f"actor={actor_loss:.4f} alpha={alpha_loss:.4f} alpha_val={alpha:.4f}" if do_actor else ""
-                        print(f"  [update {critic_update_count}] critic={critic_loss:.4f} {act_str}")
+                        print(f"  [update {critic_update_count}] critic={critic_loss:.4f} actor={actor_loss:.4f} alpha_loss={alpha_loss:.4f} alpha={alpha:.4f}")
 
             if global_step >= args.start_steps:
                 agent.soft_update(args.tau)
