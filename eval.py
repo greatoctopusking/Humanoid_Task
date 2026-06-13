@@ -1,11 +1,12 @@
 import argparse
+import pickle
 
 import gymnasium as gym
 import numpy as np
 import torch
 
 from lib.agent import SACAgent
-from lib.utils import make_eval_env, load_normalize_params
+from lib.utils import make_eval_env, extract_obs_rms
 
 
 def parse_eval_args():
@@ -23,7 +24,23 @@ if __name__ == "__main__":
     args = parse_eval_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    env = make_eval_env(args.env, seed=args.seed, render=args.render)
+    if args.render:
+        env = gym.make(args.env, render_mode="human")
+    else:
+        env = gym.make(args.env)
+    env.reset(seed=args.seed)
+
+    if args.normalize and args.normalize != "":
+        env = gym.wrappers.NormalizeObservation(env)
+        obs_rms = extract_obs_rms(env)
+        if obs_rms is not None:
+            with open(args.normalize, "rb") as f:
+                params = pickle.load(f)
+            if params["obs_rms"] is not None:
+                obs_rms.mean = params["obs_rms"]["mean"]
+                obs_rms.var = params["obs_rms"]["var"]
+                obs_rms.count = params["obs_rms"]["count"]
+
     obs_dim = env.observation_space.shape
     action_dim = env.action_space.shape
     action_low = float(env.action_space.low[0])
@@ -37,22 +54,6 @@ if __name__ == "__main__":
         agent.load_state_dict(torch.load(args.model, map_location=device))
 
     agent.eval()
-
-    if args.normalize and args.normalize != "":
-        obs_norm_env = None
-        ret_norm_env = None
-        norm_env = gym.make(args.env)
-        norm_env = gym.wrappers.NormalizeObservation(norm_env)
-        norm_env = gym.wrappers.NormalizeReward(norm_env)
-        w = norm_env
-        while hasattr(w, "env"):
-            if hasattr(w, "obs_rms") and obs_norm_env is None:
-                obs_norm_env = w
-            if hasattr(w, "return_rms") and ret_norm_env is None:
-                ret_norm_env = w
-            w = w.env
-        load_normalize_params(obs_norm_env, ret_norm_env, args.normalize)
-        norm_env.close()
 
     episode_rewards = []
     for ep in range(args.episodes):

@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from lib.agent import SACAgent
 from lib.buffer import ReplayBuffer
-from lib.utils import parse_args, set_seed, make_env, make_eval_env, save_normalize_params, log_video
+from lib.utils import parse_args, set_seed, make_env, make_eval_env, save_normalize_params, log_video, extract_obs_rms
 
 
 class Tee:
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     envs = gym.vector.AsyncVectorEnv(
         [lambda i=i: make_env(args.env, normalize=True) for i in range(args.n_envs)]
     )
-    raw_eval_env = make_eval_env(args.env, seed=args.seed)
+    norm_eval_env = make_env(args.env, normalize=True)
     test_video_env = gym.make(args.env, render_mode="rgb_array")
     test_video_env.metadata["render_fps"] = 30
     test_video_env.reset(seed=args.seed)
@@ -218,11 +218,23 @@ if __name__ == "__main__":
                     )
                     critic_update_count += 1
 
+                    if critic_update_count % 5000 == 0:
+                        act_str = f"actor={actor_loss:.4f} alpha={alpha_loss:.4f} alpha_val={alpha:.4f}" if do_actor else ""
+                        print(f"  [update {critic_update_count}] critic={critic_loss:.4f} {act_str}")
+
             if global_step >= args.start_steps:
                 agent.soft_update(args.tau)
 
             if global_step % args.eval_freq < args.n_envs or global_step >= args.total_steps:
-                raw_mean, raw_std = evaluate(agent, raw_eval_env, device, args.eval_episodes)
+                if global_step >= args.start_steps:
+                    train_rms = extract_obs_rms(envs.envs[0])
+                    eval_rms = extract_obs_rms(norm_eval_env)
+                    if train_rms is not None and eval_rms is not None:
+                        eval_rms.mean = train_rms.mean.copy()
+                        eval_rms.var = train_rms.var.copy()
+                        eval_rms.count = train_rms.count
+
+                raw_mean, raw_std = evaluate(agent, norm_eval_env, device, args.eval_episodes)
                 writer.add_scalar("reward/raw_mean", raw_mean, global_step)
                 writer.add_scalar("reward/raw_std", raw_std, global_step)
                 print(f"\nStep {global_step}: Eval (raw env) mean={raw_mean:.2f}, std={raw_std:.2f}")
@@ -241,7 +253,7 @@ if __name__ == "__main__":
 
     finally:
         envs.close()
-        raw_eval_env.close()
+        norm_eval_env.close()
         test_video_env.close()
         writer.close()
         tee.close()

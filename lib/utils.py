@@ -60,7 +60,7 @@ def make_eval_env(env_id, seed=None, render=False, fps=30):
     return env
 
 
-def _extract_obs_rms(env):
+def extract_obs_rms(env):
     w = env
     while hasattr(w, "env"):
         if hasattr(w, "obs_rms"):
@@ -73,7 +73,7 @@ def save_normalize_params(envs, path):
     if hasattr(envs, "envs"):
         rms_list = []
         for e in envs.envs:
-            r = _extract_obs_rms(e)
+            r = extract_obs_rms(e)
             if r is not None:
                 rms_list.append(r)
         obs_data = None
@@ -84,7 +84,7 @@ def save_normalize_params(envs, path):
                 "count": np.sum([r.count for r in rms_list]),
             }
     else:
-        r = _extract_obs_rms(envs)
+        r = extract_obs_rms(envs)
         obs_data = {"mean": r.mean.copy(), "var": r.var.copy(), "count": r.count} if r is not None else None
 
     params = {"obs_rms": obs_data, "ret_rms": None}
