@@ -202,10 +202,9 @@ if __name__ == "__main__":
                         args.gamma, do_actor,
                         scaler_critic, scaler_actor, device,
                     )
-                    critic_update_count += 1
-
                     if critic_update_count % 5000 == 0:
                         print(f"  [update {critic_update_count}] critic={critic_loss:.4f} actor={actor_loss:.4f}")
+                    critic_update_count += 1
 
             if global_step >= args.start_steps:
                 agent.soft_update(args.tau)
