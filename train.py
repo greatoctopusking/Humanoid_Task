@@ -226,12 +226,12 @@ if __name__ == "__main__":
 
             if global_step % args.eval_freq < args.n_envs or global_step >= args.total_steps:
                 if global_step >= args.start_steps:
-                    train_rms = extract_obs_rms(envs.envs[0])
+                    rms_list = envs.get_attr("obs_rms")
                     eval_rms = extract_obs_rms(norm_eval_env)
-                    if train_rms is not None and eval_rms is not None:
-                        eval_rms.mean = train_rms.mean.copy()
-                        eval_rms.var = train_rms.var.copy()
-                        eval_rms.count = train_rms.count
+                    if rms_list and eval_rms is not None:
+                        eval_rms.mean = np.mean([r.mean for r in rms_list], axis=0)
+                        eval_rms.var = np.mean([r.var for r in rms_list], axis=0)
+                        eval_rms.count = np.sum([r.count for r in rms_list])
 
                 raw_mean, raw_std = evaluate(agent, norm_eval_env, device, args.eval_episodes)
                 writer.add_scalar("reward/raw_mean", raw_mean, global_step)

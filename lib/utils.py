@@ -70,12 +70,8 @@ def extract_obs_rms(env):
 
 
 def save_normalize_params(envs, path):
-    if hasattr(envs, "envs"):
-        rms_list = []
-        for e in envs.envs:
-            r = extract_obs_rms(e)
-            if r is not None:
-                rms_list.append(r)
+    if hasattr(envs, "get_attr"):
+        rms_list = envs.get_attr("obs_rms")
         obs_data = None
         if rms_list:
             obs_data = {
