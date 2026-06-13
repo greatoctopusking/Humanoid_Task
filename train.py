@@ -56,7 +56,7 @@ def evaluate(agent, env, device, num_episodes=10):
 
 def sac_update(agent, critic_optim, actor_optim, alpha_optim,
                batch_obs, batch_actions, batch_rewards, batch_next_obs, batch_dones,
-               gamma, tau, update_actor,
+               gamma, update_actor,
                scaler_critic, scaler_actor, scaler_alpha, device):
     alpha = agent.alpha.detach()
 
@@ -111,8 +111,6 @@ def sac_update(agent, critic_optim, actor_optim, alpha_optim,
         scaler_alpha.step(alpha_optim)
         scaler_alpha.update()
         alpha_loss_val = alpha_loss.item()
-
-    agent.soft_update(tau)
 
     return critic_loss.item(), actor_loss_val, alpha_loss_val, alpha.item()
 
@@ -215,17 +213,13 @@ if __name__ == "__main__":
                     critic_loss, actor_loss, alpha_loss, alpha = sac_update(
                         agent, critic_optim, actor_optim, alpha_optim,
                         batch[0], batch[1], batch[2], batch[3], batch[4],
-                        args.gamma, args.tau, do_actor,
+                        args.gamma, do_actor,
                         scaler_critic, scaler_actor, scaler_alpha, device,
                     )
                     critic_update_count += 1
 
-                    if critic_update_count % 1000 == 0:
-                        writer.add_scalar("loss/critic", critic_loss, critic_update_count)
-                        if do_actor:
-                            writer.add_scalar("loss/actor", actor_loss, critic_update_count)
-                            writer.add_scalar("loss/alpha", alpha_loss, critic_update_count)
-                            writer.add_scalar("metrics/alpha", alpha, critic_update_count)
+            if global_step >= args.start_steps:
+                agent.soft_update(args.tau)
 
             if global_step % args.eval_freq < args.n_envs or global_step >= args.total_steps:
                 raw_mean, raw_std = evaluate(agent, raw_eval_env, device, args.eval_episodes)
