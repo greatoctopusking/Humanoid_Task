@@ -42,8 +42,7 @@ class SACAgent(nn.Module):
         self.critic_1_target.load_state_dict(self.critic_1.state_dict())
         self.critic_2_target.load_state_dict(self.critic_2.state_dict())
 
-        self.target_entropy = -num_actions
-        self.log_alpha = nn.Parameter(torch.tensor(0.0))
+        self.alpha = 0.2
 
         self._init_weights()
 
@@ -111,7 +110,3 @@ class SACAgent(nn.Module):
         for target, source in [(self.critic_1_target, self.critic_1), (self.critic_2_target, self.critic_2)]:
             for tp, sp in zip(target.parameters(), source.parameters()):
                 tp.data.copy_(tau * sp.data + (1.0 - tau) * tp.data)
-
-    @property
-    def alpha(self):
-        return self.log_alpha.exp()

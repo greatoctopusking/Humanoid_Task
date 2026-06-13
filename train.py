@@ -54,11 +54,11 @@ def evaluate(agent, env, device, num_episodes=10):
     return float(np.mean(episode_rewards)), float(np.std(episode_rewards))
 
 
-def sac_update(agent, critic_optim, actor_optim, alpha_optim,
+def sac_update(agent, critic_optim, actor_optim,
                batch_obs, batch_actions, batch_rewards, batch_next_obs, batch_dones,
                gamma, update_actor,
-               scaler_critic, scaler_actor, scaler_alpha, device):
-    alpha = agent.alpha.detach()
+               scaler_critic, scaler_actor, device):
+    alpha = agent.alpha
 
     with torch.no_grad():
         next_actions, next_log_probs = agent.get_action(batch_next_obs)
@@ -81,15 +81,13 @@ def sac_update(agent, critic_optim, actor_optim, alpha_optim,
     scaler_critic.update()
 
     actor_loss_val = 0.0
-    alpha_loss_val = 0.0
 
     if update_actor:
         with torch.amp.autocast(str(device)):
             new_actions, new_log_probs = agent.get_action(batch_obs)
-            new_log_probs_sq = new_log_probs.unsqueeze(-1)
             q1_new, q2_new = agent.get_q_values(batch_obs, new_actions)
             q_new = torch.min(q1_new, q2_new)
-            actor_loss = (alpha * new_log_probs_sq - q_new).mean()
+            actor_loss = (alpha * new_log_probs.unsqueeze(-1) - q_new).mean()
 
         actor_params = list(agent.actor_fc.parameters()) + \
                        [agent.actor_mu.weight, agent.actor_mu.bias,
@@ -102,17 +100,7 @@ def sac_update(agent, critic_optim, actor_optim, alpha_optim,
         scaler_actor.update()
         actor_loss_val = actor_loss.item()
 
-        with torch.amp.autocast(str(device)):
-            alpha_loss = -(agent.log_alpha * (new_log_probs.detach() + agent.target_entropy)).mean()
-
-        alpha_optim.zero_grad()
-        scaler_alpha.scale(alpha_loss).backward()
-        scaler_alpha.unscale_(alpha_optim)
-        scaler_alpha.step(alpha_optim)
-        scaler_alpha.update()
-        alpha_loss_val = alpha_loss.item()
-
-    return critic_loss.item(), actor_loss_val, alpha_loss_val, alpha.item()
+    return critic_loss.item(), actor_loss_val
 
 
 if __name__ == "__main__":
@@ -160,11 +148,9 @@ if __name__ == "__main__":
 
     actor_optim = optim.Adam(actor_params, lr=args.learning_rate, eps=1e-5)
     critic_optim = optim.Adam(critic_params, lr=args.learning_rate, eps=1e-5)
-    alpha_optim = optim.Adam([agent.log_alpha], lr=args.alpha_lr, eps=1e-5)
 
     scaler_critic = torch.amp.GradScaler(str(device))
     scaler_actor = torch.amp.GradScaler(str(device))
-    scaler_alpha = torch.amp.GradScaler(str(device))
 
     buffer = ReplayBuffer(obs_dim, act_dim, args.buffer_size, device)
 
@@ -210,16 +196,16 @@ if __name__ == "__main__":
                     batch = buffer.sample(args.batch_size)
 
                     do_actor = (critic_update_count % actor_update_freq == 0)
-                    critic_loss, actor_loss, alpha_loss, alpha = sac_update(
-                        agent, critic_optim, actor_optim, alpha_optim,
+                    critic_loss, actor_loss = sac_update(
+                        agent, critic_optim, actor_optim,
                         batch[0], batch[1], batch[2], batch[3], batch[4],
                         args.gamma, do_actor,
-                        scaler_critic, scaler_actor, scaler_alpha, device,
+                        scaler_critic, scaler_actor, device,
                     )
                     critic_update_count += 1
 
                     if critic_update_count % 5000 == 0:
-                        print(f"  [update {critic_update_count}] critic={critic_loss:.4f} actor={actor_loss:.4f} alpha_loss={alpha_loss:.4f} alpha={alpha:.4f}")
+                        print(f"  [update {critic_update_count}] critic={critic_loss:.4f} actor={actor_loss:.4f}")
 
             if global_step >= args.start_steps:
                 agent.soft_update(args.tau)
