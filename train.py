@@ -81,6 +81,9 @@ def sac_update(agent, critic_optim, actor_optim,
     scaler_critic.update()
 
     actor_loss_val = 0.0
+    q_mean_val = 0.0
+    q_std_val = 0.0
+    log_prob_mean_val = 0.0
 
     if update_actor:
         with torch.amp.autocast(str(device)):
@@ -100,7 +103,11 @@ def sac_update(agent, critic_optim, actor_optim,
         scaler_actor.update()
         actor_loss_val = actor_loss.item()
 
-    return critic_loss.item(), actor_loss_val
+        q_mean_val = q_new.mean().item()
+        q_std_val = q_new.std().item()
+        log_prob_mean_val = new_log_probs.mean().item()
+
+    return critic_loss.item(), actor_loss_val, q_mean_val, q_std_val, log_prob_mean_val
 
 
 if __name__ == "__main__":
@@ -159,6 +166,7 @@ if __name__ == "__main__":
     global_step = 0
     best_mean_reward = -np.inf
     episode_rewards = np.zeros(args.n_envs)
+    episode_steps_arr = np.zeros(args.n_envs)
     critic_update_count = 0
     actor_update_freq = 2
 
@@ -182,10 +190,12 @@ if __name__ == "__main__":
                 real_done = float(terminations[i])
                 buffer.store(obs[i], actions[i], rewards[i], next_obs[i], real_done)
                 episode_rewards[i] += rewards[i]
-
+                episode_steps_arr[i] += 1
                 if terminations[i] or truncations[i]:
                     writer.add_scalar("train/episode_reward", episode_rewards[i], global_step)
+                    writer.add_scalar("train/episode_steps", episode_steps_arr[i], global_step)
                     episode_rewards[i] = 0.0
+                    episode_steps_arr[i] = 0
 
             obs = next_obs
             global_step += args.n_envs
@@ -196,14 +206,19 @@ if __name__ == "__main__":
                     batch = buffer.sample(args.batch_size)
 
                     do_actor = (critic_update_count % actor_update_freq == 0)
-                    critic_loss, actor_loss = sac_update(
+                    critic_loss, actor_loss, q_mean, q_std, log_prob_mean = sac_update(
                         agent, critic_optim, actor_optim,
                         batch[0], batch[1], batch[2], batch[3], batch[4],
                         args.gamma, do_actor,
                         scaler_critic, scaler_actor, device,
                     )
                     if critic_update_count % 5000 == 0:
-                        print(f"  [update {critic_update_count}] critic={critic_loss:.4f} actor={actor_loss:.4f}")
+                        print(f"  [update {critic_update_count}] critic={critic_loss:.4f} actor={actor_loss:.4f} q_mean={q_mean:.2f} q_std={q_std:.2f} log_prob={log_prob_mean:.2f}")
+                        writer.add_scalar("loss/critic", critic_loss, critic_update_count)
+                        writer.add_scalar("loss/actor", actor_loss, critic_update_count)
+                        writer.add_scalar("metrics/q_mean", q_mean, critic_update_count)
+                        writer.add_scalar("metrics/q_std", q_std, critic_update_count)
+                        writer.add_scalar("metrics/log_prob", log_prob_mean, critic_update_count)
                     critic_update_count += 1
 
             if global_step >= args.start_steps:
